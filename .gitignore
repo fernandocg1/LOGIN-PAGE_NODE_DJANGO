@@ -1,5 +1,9 @@
-node_modules/
-npm-debug.log*
-.DS_Store
+# Python
 venv/
 __pycache__/
+*.pyc
+db.sqlite3
+
+# Node.js
+node_modules/
+npm-debug.log*
