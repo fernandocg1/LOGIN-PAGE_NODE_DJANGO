@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const bcrypt = require('bcryptjs'); 
 const { connectToDb, createUser } = require('./db-service'); 
 
@@ -8,6 +9,12 @@ const PORT = 3000;
 // Middleware para analisar requisições JSON (necessário para receber dados do frontend)
 app.use(express.json());
 
+app.use(cors({
+        origin: '*', // Permite TODAS as origens (somente em desenvolvimento)
+        methods: ['GET', 'POST'],
+    }));
+    
+    app.use(express.json());
 // --- Endpoint de Registro ---
 app.post('/api/registro', async (req, res) => {
     const { email, password } = req.body;

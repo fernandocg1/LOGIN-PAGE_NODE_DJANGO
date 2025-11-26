@@ -1,14 +1,12 @@
 # core/auth_service.py
 
-import base64        # Módulo nativo do Python para codificação base32
-import pyotp         # Biblioteca TOTP (Time-based One-Time Password)
+import base64       
+import pyotp      
 import bcrypt
-import pyodbc        # Driver para conexão direta com o SQL Server
+import pyodbc     
 from io import BytesIO
-import qrcode        # Para gerar o QR code
+import qrcode       
 
-# ⚠️ SUA STRING DE CONEXÃO DIRETA DO SQL SERVER
-# Use o nome do servidor, porta, login e senha que foram testados com sucesso.
 SQL_CONN_STR = (
     "DRIVER={ODBC Driver 17 for SQL Server};"
     "SERVER=GADELHA_PC\\SQLEXPRESS,1433;"
@@ -17,33 +15,23 @@ SQL_CONN_STR = (
     "PWD=Gta$@543;" 
 )
 
-# -----------------------------------------------------------
-# CLASSE AUXILIAR (FakeUser) - Simula o objeto de usuário do ORM para JWT e 2FA
-# -----------------------------------------------------------
-
 class FakeUser:
     """Objeto auxiliar para simular o modelo ORM para JWT e 2FA."""
     def __init__(self, user_id, is_2fa_enabled, secret_2fa=None):
-        self.id = user_id                   # Usado pelo JWT
+        self.id = user_id                 
         self.is_authenticated = True
-        self.is_2fa_enabled = is_2fa_enabled # Usado pela view de login
-        self.Secret2FA = secret_2fa         # Chave secreta
+        self.is_2fa_enabled = is_2fa_enabled 
+        self.Secret2FA = secret_2fa        
         
-# -----------------------------------------------------------
-# FUNÇÃO DE LOGIN E VERIFICAÇÃO DE SENHA (BCRYPT)
-# -----------------------------------------------------------
-
 def verify_password(email, password):
     """
     Verifica a senha plana contra o hash armazenado no SQL Server.
     Busca Hash, Status 2FA e Chave Secreta do DB.
     """
-    # Busca Direta via pyodbc
     try:
         cnxn = pyodbc.connect(SQL_CONN_STR)
         cursor = cnxn.cursor()
         
-        # ⚠️ BUSCA TODOS OS CAMPOS NECESSÁRIOS: Hash, Id, Is2FAEnabled, Secret2FA
         cursor.execute("SELECT PasswordHash, Id, Is2FAEnabled, Secret2FA FROM Users WHERE Email=?", email)
         row = cursor.fetchone()
         
@@ -51,24 +39,22 @@ def verify_password(email, password):
         cnxn.close()
 
         if not row:
-            return None # Usuário não encontrado
+            return None 
         
         password_hash = row[0].encode('utf-8')
         user_id = row[1]
         is_2fa_enabled = row[2]
-        secret_2fa = row[3] # Chave secreta
+        secret_2fa = row[3] 
         
     except Exception as e:
         print(f"Erro na conexão pyodbc ou busca (verify_password): {e}")
         return None
         
-    # Verificação BCrypt
     try:
         plain_password_bytes = password.encode('utf-8')
         is_valid = bcrypt.checkpw(plain_password_bytes, password_hash)
         
         if is_valid:
-            # Retorna o objeto FakeUser com todos os dados necessários
             return FakeUser(user_id, is_2fa_enabled, secret_2fa)
         else:
             return None 
@@ -76,10 +62,6 @@ def verify_password(email, password):
     except Exception as e:
         print(f"Erro na verificação BCrypt: {e}")
         return None
-
-# -----------------------------------------------------------
-# FUNÇÕES DE 2FA (ATIVAR/LER/DESATIVAR)
-# -----------------------------------------------------------
 
 def update_2fa_secret(user_id, secret):
     """
@@ -90,7 +72,6 @@ def update_2fa_secret(user_id, secret):
         cnxn = pyodbc.connect(SQL_CONN_STR)
         cursor = cnxn.cursor()
         
-        # O SQL Server espera True/False para BIT (0/1)
         is_enabled = 1 if secret else 0 
         
         cursor.execute("""
@@ -114,13 +95,11 @@ def get_2fa_secret(user_id):
     try:
         cnxn = pyodbc.connect(SQL_CONN_STR)
         cursor = cnxn.cursor()
-        # ⚠️ Busca todos os campos necessários para a verificação TOTP
         cursor.execute("SELECT Id, Is2FAEnabled, Secret2FA FROM Users WHERE Id=?", user_id)
         row = cursor.fetchone()
         cnxn.close()
         
         if row:
-            # Retorna o objeto FakeUser para ser usado na view
             return FakeUser(row[0], row[1], row[2])
         return None
         
@@ -137,7 +116,6 @@ def disable_2fa(user_id):
         cnxn = pyodbc.connect(SQL_CONN_STR)
         cursor = cnxn.cursor()
         
-        # Limpa a chave secreta e desativa o 2FA
         cursor.execute("""
             UPDATE Users 
             SET Secret2FA = NULL, Is2FAEnabled = 0
@@ -167,5 +145,4 @@ def generate_2fa_qr_code(email, secret):
     buf = BytesIO()
     qr.save(buf, format="PNG")
     
-    # Retorna a string Base64 para ser exibida no frontend
     return base64.b64encode(buf.getvalue()).decode('utf-8'), totp_uri
